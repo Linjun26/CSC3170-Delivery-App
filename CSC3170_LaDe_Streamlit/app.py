@@ -14,8 +14,8 @@ import streamlit as st
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_DB_PATH = APP_DIR / "data" / "sh_2026_05.db"
 
-DEFAULT_PICKUP_CSV = "/Users/wangxiaoxi/Desktop/CSC3170_LaDe_Streamlit/pickup_sh_2026-05.csv"
-DEFAULT_DELIVERY_CSV = "/Users/wangxiaoxi/Desktop/CSC3170_LaDe_Streamlit/delivery_sh_2026-05-01_15.csv"
+DEFAULT_PICKUP_CSV = "CSC3170_LaDe_Streamlit/pickup_sh_2026-05.csv"
+DEFAULT_DELIVERY_CSV = "CSC3170_LaDe_Streamlit/delivery_sh_2026-05-01_15.csv"
 DEFAULT_YEAR = 2026
 DEFAULT_CITY = "Shanghai"
 
