@@ -14,8 +14,8 @@ import streamlit as st
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_DB_PATH = APP_DIR / "data" / "sh_2026_05.db"
 
-DEFAULT_PICKUP_CSV = "/Users/wangxiaoxi/Desktop/CSC3170_LaDe_Streamlit/pickup_sh_2026-05.csv"
-DEFAULT_DELIVERY_CSV = "/Users/wangxiaoxi/Desktop/CSC3170_LaDe_Streamlit/delivery_sh_2026-05-01_15.csv"
+DEFAULT_PICKUP_CSV = "CSC3170_LaDe_Streamlit/pickup_sh_2026-05.csv"
+DEFAULT_DELIVERY_CSV = "CSC3170_LaDe_Streamlit/delivery_sh_2026-05-01_15.csv"
 DEFAULT_YEAR = 2026
 DEFAULT_CITY = "Shanghai"
 
@@ -398,20 +398,20 @@ def ui_header() -> None:
         """,
         unsafe_allow_html=True,
     )
-    st.title("上海（2026/05）Pickup & Delivery 数据库检索")
+    st.title("Shanghai (2026/05) Pickup & Delivery Database Explorer")
 
 
 def sidebar_db_path() -> str:
-    st.sidebar.header("设置")
+    st.sidebar.header("Settings")
     default = os.environ.get("CSC3170_DB_PATH", str(DEFAULT_DB_PATH))
-    db_path = st.sidebar.text_input("SQLite 路径", value=default, help="SQLite 文件路径（本地运行时会自动创建）")
+    db_path = st.sidebar.text_input("SQLite path", value=default, help="SQLite file path (auto-created when running locally)")
     return db_path
 
 
 def sidebar_filters(conn: sqlite3.Connection) -> dict[str, Any]:
-    st.sidebar.header("筛选")
+    st.sidebar.header("Filters")
 
-    scenario = st.sidebar.multiselect("场景", options=["pickup", "delivery"], default=["pickup", "delivery"])
+    scenario = st.sidebar.multiselect("Scenario", options=["pickup", "delivery"], default=["pickup", "delivery"])
 
     regions = df_query(
         conn,
@@ -426,7 +426,7 @@ def sidebar_filters(conn: sqlite3.Connection) -> dict[str, Any]:
 
     min_dt = _parse_iso(str(minmax.loc[0, "min_dt"])).date()
     max_dt = _parse_iso(str(minmax.loc[0, "max_dt"])).date()
-    date_range = st.sidebar.date_input("accept_time 日期范围", value=(min_dt, max_dt), min_value=min_dt, max_value=max_dt)
+    date_range = st.sidebar.date_input("Accept date range", value=(min_dt, max_dt), min_value=min_dt, max_value=max_dt)
     if isinstance(date_range, tuple) and len(date_range) == 2:
         date_start, date_end = date_range
     else:
@@ -436,12 +436,12 @@ def sidebar_filters(conn: sqlite3.Connection) -> dict[str, Any]:
 
 
 def page_overview(conn: sqlite3.Connection) -> None:
-    st.subheader("概览")
+    st.subheader("Overview")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("订单", _table_count(conn, "orders"))
-    c2.metric("骑手", _table_count(conn, "courier"))
-    c3.metric("AOI", _table_count(conn, "aoi"))
-    c4.metric("GPS 事件", _table_count(conn, "gps_event"))
+    c1.metric("Orders", _table_count(conn, "orders"))
+    c2.metric("Couriers", _table_count(conn, "courier"))
+    c3.metric("AOIs", _table_count(conn, "aoi"))
+    c4.metric("GPS events", _table_count(conn, "gps_event"))
 
     w = df_query(
         conn,
@@ -457,11 +457,11 @@ def page_overview(conn: sqlite3.Connection) -> None:
     if not w.empty:
         r = w.iloc[0]
         c5, c6, c7 = st.columns(3)
-        c5.metric("平均重量(kg)", "-" if pd.isna(r["avg_w"]) else float(r["avg_w"]))
-        c6.metric("最大重量(kg)", "-" if pd.isna(r["max_w"]) else float(r["max_w"]))
-        c7.metric("有重量记录", int(r["n_w"]))
+        c5.metric("Avg weight (kg)", "-" if pd.isna(r["avg_w"]) else float(r["avg_w"]))
+        c6.metric("Max weight (kg)", "-" if pd.isna(r["max_w"]) else float(r["max_w"]))
+        c7.metric("With weight", int(r["n_w"]))
 
-    st.subheader("每日订单量")
+    st.subheader("Daily orders")
     daily = df_query(
         conn,
         """
@@ -476,9 +476,9 @@ def page_overview(conn: sqlite3.Connection) -> None:
         pivot = daily.pivot(index="day", columns="scenario", values="orders").fillna(0)
         st.line_chart(pivot)
     else:
-        st.info("暂无数据：请先在左侧导入 CSV。")
+        st.info("No data yet. Import the CSV files from the sidebar first.")
 
-    st.subheader("骑手 Top（按订单数）")
+    st.subheader("Top couriers (by orders)")
     top = df_query(
         conn,
         """
@@ -496,19 +496,19 @@ def page_overview(conn: sqlite3.Connection) -> None:
 
 
 def page_search(conn: sqlite3.Connection, flt: dict[str, Any]) -> None:
-    st.subheader("检索")
-    tab1, tab2, tab3 = st.tabs(["订单检索", "骑手检索", "GPS 事件时间线"])
+    st.subheader("Search")
+    tab1, tab2, tab3 = st.tabs(["Orders", "Couriers", "GPS timeline"])
 
     with tab1:
         left, right = st.columns([2, 1])
         with left:
-            keyword = st.text_input("order_id / courier_id 关键字", value="")
+            keyword = st.text_input("Keyword (order_id / courier_id)", value="")
         with right:
-            aoi_type = st.selectbox("aoi_type", options=["(all)"] + [str(x) for x in range(0, 20)])
+            aoi_type = st.selectbox("AOI type", options=["(all)"] + [str(x) for x in range(0, 20)])
 
-        courier_name_kw = st.text_input("快递员姓名包含", value="")
-        weight_min_txt = st.text_input("重量下限(kg)", value="")
-        weight_max_txt = st.text_input("重量上限(kg)", value="")
+        courier_name_kw = st.text_input("Courier name contains", value="")
+        weight_min_txt = st.text_input("Min weight (kg)", value="")
+        weight_max_txt = st.text_input("Max weight (kg)", value="")
 
         wmin: float | None = None
         wmax: float | None = None
@@ -516,12 +516,12 @@ def page_search(conn: sqlite3.Connection, flt: dict[str, Any]) -> None:
             try:
                 wmin = float(weight_min_txt.strip())
             except Exception:
-                st.error("重量下限需要是数字。")
+                st.error("Min weight must be a number.")
         if weight_max_txt.strip():
             try:
                 wmax = float(weight_max_txt.strip())
             except Exception:
-                st.error("重量上限需要是数字。")
+                st.error("Max weight must be a number.")
 
         where = []
         params: list[Any] = []
@@ -581,21 +581,21 @@ def page_search(conn: sqlite3.Connection, flt: dict[str, Any]) -> None:
             tuple(params),
         )
 
-        st.caption(f"最多显示 500 条；当前 {len(df)} 条")
+        st.caption(f"Showing up to 500 rows; {len(df)} rows returned")
         st.dataframe(df.drop(columns=["order_lng", "order_lat"], errors="ignore"), use_container_width=True, hide_index=True)
 
         if not df.empty:
             csv = df.to_csv(index=False).encode("utf-8")
-            st.download_button("下载 CSV", data=csv, file_name="orders.csv", mime="text/csv")
+            st.download_button("Download CSV", data=csv, file_name="orders.csv", mime="text/csv")
 
         st.divider()
-        st.markdown("地图（订单坐标）")
+        st.markdown("Map (order coordinates)")
         map_df = df[["order_lat", "order_lng"]].rename(columns={"order_lat": "lat", "order_lng": "lon"})
         map_df = map_df.dropna()
         if not map_df.empty:
             st.map(map_df)
         else:
-            st.info("没有可展示的坐标数据。")
+            st.info("No coordinates to display.")
 
     with tab2:
         couriers = df_query(
@@ -610,20 +610,20 @@ def page_search(conn: sqlite3.Connection, flt: dict[str, Any]) -> None:
             """,
         )
         if couriers.empty:
-            st.info("暂无数据：请先导入 CSV。")
+            st.info("No data yet. Import the CSV files first.")
         else:
             labels = [
                 f"{int(r.courier_id)} | {str(r.courier_name or '')} | {str(r.courier_phone or '')} | {int(r.orders)}"
                 for r in couriers.itertuples(index=False)
             ]
-            selected = st.selectbox("courier", options=labels)
+            selected = st.selectbox("Courier", options=labels)
             courier_id = int(selected.split("|")[0].strip())
 
             courier_row = conn.execute(
                 "SELECT courier_id, courier_name, courier_phone FROM courier WHERE courier_id = ?",
                 (int(courier_id),),
             ).fetchone()
-            st.write(f"courier_id={courier_row['courier_id']} | 姓名={courier_row['courier_name']} | 电话={courier_row['courier_phone']}")
+            st.write(f"courier_id={courier_row['courier_id']} | name={courier_row['courier_name']} | phone={courier_row['courier_phone']}")
 
             summary = df_query(
                 conn,
@@ -654,10 +654,10 @@ def page_search(conn: sqlite3.Connection, flt: dict[str, Any]) -> None:
             st.dataframe(df, use_container_width=True, hide_index=True)
 
     with tab3:
-        scenario = st.selectbox("场景", options=["pickup", "delivery"], index=0)
+        scenario = st.selectbox("Scenario", options=["pickup", "delivery"], index=0)
         order_id_text = st.text_input("order_id", value="")
         if not order_id_text.strip().isdigit():
-            st.info("请输入一个数字 order_id。")
+            st.info("Please enter a numeric order_id.")
         else:
             order_key = f"{scenario}:{int(order_id_text.strip())}"
             row = conn.execute(
@@ -671,10 +671,10 @@ def page_search(conn: sqlite3.Connection, flt: dict[str, Any]) -> None:
                 (order_key,),
             ).fetchone()
             if not row:
-                st.warning("未找到该订单。")
+                st.warning("Order not found.")
             else:
                 st.write(
-                    f"order_key={row['order_key']} | courier_id={row['courier_id']} | 姓名={row['courier_name']} | 电话={row['courier_phone']} | region_id={row['region_id']} | aoi_id={row['aoi_id']} | 重量={row['package_weight']} | accept_time={row['accept_time']} | fulfill_time={row['fulfill_time']}"
+                    f"order_key={row['order_key']} | courier_id={row['courier_id']} | name={row['courier_name']} | phone={row['courier_phone']} | region_id={row['region_id']} | aoi_id={row['aoi_id']} | weight={row['package_weight']} | accept_time={row['accept_time']} | fulfill_time={row['fulfill_time']}"
                 )
                 ev = df_query(
                     conn,
@@ -690,18 +690,18 @@ def page_search(conn: sqlite3.Connection, flt: dict[str, Any]) -> None:
 
 
 def page_crud(conn: sqlite3.Connection) -> None:
-    st.subheader("管理（插入 / 更新 / 删除）")
-    tab1, tab2, tab3 = st.tabs(["新增骑手", "新增订单", "更新/删除订单"])
+    st.subheader("Admin (Insert / Update / Delete)")
+    tab1, tab2, tab3 = st.tabs(["Add courier", "Add order", "Update/Delete order"])
 
     with tab1:
         with st.form("add_courier", clear_on_submit=True):
             courier_id = st.text_input("courier_id", value="")
-            courier_phone = st.text_input("courier_phone（可空）", value="")
-            courier_name = st.text_input("courier_name（可空）", value="")
-            submitted = st.form_submit_button("插入")
+            courier_phone = st.text_input("courier_phone (optional)", value="")
+            courier_name = st.text_input("courier_name (optional)", value="")
+            submitted = st.form_submit_button("Insert")
             if submitted:
                 if not courier_id.strip().isdigit():
-                    st.error("courier_id 必须是数字。")
+                    st.error("courier_id must be a number.")
                 else:
                     try:
                         city_id = ensure_city(conn)
@@ -721,9 +721,9 @@ def page_crud(conn: sqlite3.Connection) -> None:
                             """,
                             (courier_phone.strip(), courier_name.strip(), int(courier_id.strip())),
                         )
-                        st.success("已插入 courier。")
+                        st.success("Courier saved.")
                     except Exception as e:
-                        st.error(f"插入失败：{e}")
+                        st.error(f"Insert failed: {e}")
 
     with tab2:
         with st.form("add_order", clear_on_submit=True):
@@ -732,22 +732,22 @@ def page_crud(conn: sqlite3.Connection) -> None:
             region_id = st.text_input("region_id", value="")
             courier_id = st.text_input("courier_id", value="")
             aoi_id = st.text_input("aoi_id", value="")
-            aoi_type = st.text_input("aoi_type（可空）", value="")
-            order_lng = st.text_input("lng（可空）", value="")
-            order_lat = st.text_input("lat（可空）", value="")
-            accept_time = st.text_input("accept_time（YYYY-MM-DD HH:MM:SS）", value="")
-            time_window_start = st.text_input("time_window_start（可空）", value="")
-            time_window_end = st.text_input("time_window_end（可空）", value="")
-            fulfill_time = st.text_input("fulfill_time（可空）", value="")
-            ds = st.text_input("ds（可空）", value="")
-            package_weight = st.text_input("package_weight(kg)（可空）", value="")
-            courier_phone = st.text_input("courier_phone（可空）", value="")
-            courier_name = st.text_input("courier_name（可空）", value="")
+            aoi_type = st.text_input("aoi_type (optional)", value="")
+            order_lng = st.text_input("lng (optional)", value="")
+            order_lat = st.text_input("lat (optional)", value="")
+            accept_time = st.text_input("accept_time (YYYY-MM-DD HH:MM:SS)", value="")
+            time_window_start = st.text_input("time_window_start (optional)", value="")
+            time_window_end = st.text_input("time_window_end (optional)", value="")
+            fulfill_time = st.text_input("fulfill_time (optional)", value="")
+            ds = st.text_input("ds (optional)", value="")
+            package_weight = st.text_input("package_weight_kg (optional)", value="")
+            courier_phone = st.text_input("courier_phone (optional)", value="")
+            courier_name = st.text_input("courier_name (optional)", value="")
 
-            submitted = st.form_submit_button("插入")
+            submitted = st.form_submit_button("Insert")
             if submitted:
                 if not order_id.strip().isdigit():
-                    st.error("order_id 必须是数字。")
+                    st.error("order_id must be a number.")
                 else:
                     try:
                         city_id = ensure_city(conn)
@@ -808,9 +808,9 @@ def page_crud(conn: sqlite3.Connection) -> None:
                                 float(package_weight.strip()) if package_weight.strip() else None,
                             ),
                         )
-                        st.success("已插入订单。")
+                        st.success("Order saved.")
                     except Exception as e:
-                        st.error(f"插入失败：{e}")
+                        st.error(f"Insert failed: {e}")
 
     with tab3:
         df = df_query(
@@ -823,10 +823,10 @@ def page_crud(conn: sqlite3.Connection) -> None:
             """,
         )
         if df.empty:
-            st.info("暂无订单。")
+            st.info("No orders yet.")
         else:
             pick = st.selectbox(
-                "选择一个订单",
+                "Select an order",
                 options=[f"{r.order_key} | courier={r.courier_id} | {r.accept_time}" for r in df.itertuples(index=False)],
             )
             order_key = pick.split("|")[0].strip()
@@ -838,10 +838,10 @@ def page_crud(conn: sqlite3.Connection) -> None:
 
             col1, col2 = st.columns(2)
             with col1:
-                new_courier = st.text_input("更新 courier_id（可空）", value=str(row["courier_id"] or ""))
-                new_aoi = st.text_input("更新 aoi_id（可空）", value=str(row["aoi_id"] or ""))
-                new_fulfill = st.text_input("更新 fulfill_time（可空）", value=str(row["fulfill_time"] or ""))
-                if st.button("更新", type="primary"):
+                new_courier = st.text_input("Update courier_id (optional)", value=str(row["courier_id"] or ""))
+                new_aoi = st.text_input("Update aoi_id (optional)", value=str(row["aoi_id"] or ""))
+                new_fulfill = st.text_input("Update fulfill_time (optional)", value=str(row["fulfill_time"] or ""))
+                if st.button("Update", type="primary"):
                     try:
                         city_id = ensure_city(conn)
                         if new_courier.strip().isdigit():
@@ -866,24 +866,24 @@ def page_crud(conn: sqlite3.Connection) -> None:
                                 order_key,
                             ),
                         )
-                        st.success("已更新。")
+                        st.success("Updated.")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"更新失败：{e}")
+                        st.error(f"Update failed: {e}")
             with col2:
-                st.warning("删除会级联删除 gps_event。")
-                if st.button("删除", type="secondary"):
+                st.warning("Deleting also removes related gps_event rows.")
+                if st.button("Delete", type="secondary"):
                     try:
                         exec_write(conn, "DELETE FROM orders WHERE order_key = ?", (order_key,))
-                        st.success("已删除。")
+                        st.success("Deleted.")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"删除失败：{e}")
+                        st.error(f"Delete failed: {e}")
 
 
 def page_sql_console(conn: sqlite3.Connection) -> None:
-    st.subheader("SQL Console（只允许 SELECT/WITH）")
-    st.caption("用于满足课程项目常见的“用户可自定义检索查询”需求；为安全起见禁用写操作。")
+    st.subheader("SQL Console (SELECT/WITH only)")
+    st.caption("Provides read-only SQL queries for exploration; write operations are blocked for safety.")
     default_sql = """
 WITH x AS (
   SELECT
@@ -901,9 +901,9 @@ ORDER BY scenario, orders DESC
     sql = st.text_area("SQL", value=default_sql, height=220)
     limit = st.number_input("最多返回行数", min_value=10, max_value=5000, value=500, step=10)
 
-    if st.button("运行", type="primary"):
+    if st.button("Run", type="primary"):
         if not is_safe_select(sql):
-            st.error("该 SQL 不被允许：仅支持单条 SELECT/WITH，且禁止写入/DDL/PRAGMA 等。")
+            st.error("This SQL is not allowed: only a single SELECT/WITH is supported; write/DDL/PRAGMA statements are blocked.")
             return
         q = sql.rstrip().rstrip(";").strip()
         if re.search(r"\blimit\b", q, flags=re.IGNORECASE):
@@ -914,7 +914,7 @@ ORDER BY scenario, orders DESC
             df = df_query(conn, final)
             st.dataframe(df, use_container_width=True, hide_index=True)
         except Exception as e:
-            st.error(f"执行失败：{e}")
+            st.error(f"Execution failed: {e}")
 
 
 def main() -> None:
@@ -923,33 +923,41 @@ def main() -> None:
     conn = get_conn(db_path)
     init_db(conn)
 
-    st.sidebar.header("数据导入")
-    pickup_csv = st.sidebar.text_input("pickup CSV 路径", value=DEFAULT_PICKUP_CSV)
-    delivery_csv = st.sidebar.text_input("delivery CSV 路径", value=DEFAULT_DELIVERY_CSV)
-    year = int(st.sidebar.number_input("pickup 年份补全", min_value=2000, max_value=2100, value=DEFAULT_YEAR, step=1))
-    clear_first = st.sidebar.checkbox("导入前清空数据库", value=True)
+    st.sidebar.header("Data import")
+    pickup_csv = st.sidebar.text_input("Pickup CSV path", value=DEFAULT_PICKUP_CSV)
+    delivery_csv = st.sidebar.text_input("Delivery CSV path", value=DEFAULT_DELIVERY_CSV)
+    year = int(
+        st.sidebar.number_input(
+            "Pickup year (for MM-DD timestamps)",
+            min_value=2000,
+            max_value=2100,
+            value=DEFAULT_YEAR,
+            step=1,
+        )
+    )
+    clear_first = st.sidebar.checkbox("Clear database before import", value=True)
 
-    if st.sidebar.button("导入/刷新"):
+    if st.sidebar.button("Import/Refresh"):
         try:
             if clear_first:
                 clear_imported_data(conn)
             import_csvs(conn, pickup_csv, delivery_csv, year=year)
-            st.sidebar.success("导入完成。")
+            st.sidebar.success("Import completed.")
             st.rerun()
         except Exception as e:
-            st.sidebar.error(f"导入失败：{e}")
+            st.sidebar.error(f"Import failed: {e}")
 
     if _table_count(conn, "orders") == 0:
-        st.info("左侧填写两个 CSV 路径后，点击“导入/刷新”。")
+        st.info("Fill in the two CSV paths on the left, then click “Import/Refresh”.")
 
     flt = sidebar_filters(conn)
-    page = st.sidebar.radio("页面", options=["概览", "检索", "管理", "SQL Console"], index=0)
+    page = st.sidebar.radio("Page", options=["Overview", "Search", "Admin", "SQL Console"], index=0)
 
-    if page == "概览":
+    if page == "Overview":
         page_overview(conn)
-    elif page == "检索":
+    elif page == "Search":
         page_search(conn, flt)
-    elif page == "管理":
+    elif page == "Admin":
         page_crud(conn)
     else:
         page_sql_console(conn)
