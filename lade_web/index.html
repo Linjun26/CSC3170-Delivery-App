@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LaDe · Last-mile Delivery Database System</title>
+
+<!-- Fonts: a distinctive pairing — editorial display + technical mono -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,700;9..144,900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- sql.js for in-browser SQLite -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+<!-- Chart.js for the analytics dashboard -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+/* ---------- Design tokens ---------- */
+:root {
+  /* A logistics SaaS palette — deep navy + cainiao orange, with warm paper */
+  --bg:           #f5f1ea;   /* warm paper */
+  --bg-elev:     #ffffff;
+  --ink:         #0b1f3a;   /* deep navy, primary text */
+  --ink-soft:    #3b4a63;
+  --muted:       #7c8599;
+  --line:        #d9d3c6;   /* aged paper line */
+  --line-soft:   #ebe6dc;
+  --accent:      #ff6b2c;   /* cainiao-style orange */
+  --accent-dark: #d9501a;
+  --accent-soft: #ffe9dd;
+  --navy:        #0b1f3a;
+  --navy-2:      #1a365f;
+  --success:     #2f7d5b;
+  --warn:        #b77500;
+
+  --radius:      10px;
+  --radius-lg:   16px;
+
+  --font-display: 'Fraunces', 'Noto Serif SC', Georgia, serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+  --shadow-sm: 0 1px 2px rgba(11, 31, 58, 0.06);
+  --shadow-md: 0 4px 12px rgba(11, 31, 58, 0.08);
+  --shadow-lg: 0 12px 32px rgba(11, 31, 58, 0.12);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle paper grain */
+body::before {
+  content: "";
+  position: fixed; inset: 0;
+  background-image: radial-gradient(circle at 1px 1px, rgba(11,31,58,0.035) 1px, transparent 0);
+  background-size: 24px 24px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ---------- Top bar ---------- */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 40px;
+  background: var(--navy);
+  color: #fff;
+  border-bottom: 3px solid var(--accent);
+}
+.brand { display: flex; align-items: baseline; gap: 14px; }
+.brand-mark {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+}
+.brand-mark::after {
+  content: "·";
+  color: #fff;
+  margin: 0 6px;
+}
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  font-style: italic;
+}
+.brand-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: rgba(255,255,255,0.55);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding-left: 14px;
+  border-left: 1px solid rgba(255,255,255,0.2);
+  margin-left: 4px;
+}
+
+.db-status {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: rgba(255,255,255,0.75);
+}
+.db-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #7c8599;
+  box-shadow: 0 0 0 3px rgba(124,133,153,0.2);
+  transition: all 0.3s ease;
+}
+.db-status.ready .db-dot {
+  background: #4ade80;
+  box-shadow: 0 0 0 3px rgba(74,222,128,0.25);
+}
+.db-status.loading .db-dot { background: var(--accent); box-shadow: 0 0 0 3px rgba(255,107,44,0.25); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.4 } }
+
+/* ---------- Tabs ---------- */
+.tabs {
+  display: flex;
+  padding: 0 40px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+.tab {
+  padding: 16px 22px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  display: flex; align-items: center; gap: 8px;
+}
+.tab:hover { color: var(--ink); background: var(--bg); }
+.tab.active {
+  color: var(--navy);
+  border-bottom-color: var(--accent);
+  background: var(--bg);
+}
+.tab-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.tab.active .tab-num { color: var(--accent); }
+
+/* ---------- Main content ---------- */
+.main {
+  flex: 1;
+  padding: 36px 40px 80px;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+.panel { display: none; }
+.panel.active { display: block; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+
+/* ---------- Hero on overview ---------- */
+.hero {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 40px;
+  margin-bottom: 40px;
+  padding-bottom: 40px;
+  border-bottom: 1px solid var(--line);
+}
+.hero-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.hero-title {
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: 56px;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  margin-bottom: 20px;
+}
+.hero-title em {
+  font-style: italic;
+  font-weight: 500;
+  color: var(--accent);
+}
+.hero-lede {
+  font-size: 17px;
+  color: var(--ink-soft);
+  line-height: 1.65;
+  max-width: 540px;
+}
+.hero-meta {
+  border-left: 1px solid var(--line);
+  padding-left: 32px;
+  display: flex; flex-direction: column; gap: 18px;
+}
+.meta-item {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.meta-item dt { color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+.meta-item dd { color: var(--ink); font-size: 14px; }
+
+/* ---------- Stat grid ---------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 40px;
+}
+.stat {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.stat-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.stat-value {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 36px;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  line-height: 1;
+}
+.stat-unit {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 4px;
+}
+.stat-trend { font-family: var(--font-mono); font-size: 11px; color: var(--accent); margin-top: 6px; }
+
+/* ---------- Section ---------- */
+.section-title {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 28px;
+  color: var(--navy);
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+}
+.section-sub {
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+.section + .section { margin-top: 48px; }
+
+/* ---------- Cards / blocks ---------- */
+.card {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+}
+.card + .card { margin-top: 20px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.card-title { font-family: var(--font-display); font-weight: 500; font-size: 18px; color: var(--navy); }
+.card-tag { font-family: var(--font-mono); font-size: 11px; padding: 3px 8px; border-radius: 4px; background: var(--accent-soft); color: var(--accent-dark); letter-spacing: 0.05em; text-transform: uppercase; }
+
+/* ---------- ER diagram ---------- */
+.er-board {
+  position: relative;
+  min-height: 520px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  overflow: auto;
+  background-image:
+    linear-gradient(var(--line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.er-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: auto auto;
+  gap: 32px;
+  position: relative;
+}
+.entity {
+  background: #fff;
+  border: 2px solid var(--navy);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+.entity:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+.entity.fact { border-color: var(--accent); }
+.entity-head {
+  background: var(--navy);
+  color: #fff;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.entity.fact .entity-head { background: var(--accent); }
+.entity-head-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+.entity-body { padding: 12px 14px; }
+.entity-field {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  padding: 3px 0;
+  display: flex; align-items: center; gap: 6px;
+  border-bottom: 1px dashed var(--line-soft);
+}
+.entity-field:last-child { border-bottom: none; }
+.entity-field.pk { color: var(--navy); font-weight: 600; }
+.entity-field.fk { color: var(--accent-dark); }
+.field-badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--line-soft);
+  color: var(--ink-soft);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.field-badge.pk { background: var(--navy); color: #fff; }
+.field-badge.fk { background: var(--accent); color: #fff; }
+.entity-field-type { margin-left: auto; color: var(--muted); font-size: 10px; }
+
+/* ---------- Tables ---------- */
+.table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-elev); }
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-family: var(--font-mono);
+}
+table.data th {
+  background: var(--navy);
+  color: #fff;
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  position: sticky; top: 0;
+  white-space: nowrap;
+}
+table.data td {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+table.data tr:nth-child(even) td { background: rgba(11,31,58,0.015); }
+table.data tr:hover td { background: var(--accent-soft); }
+
+/* ---------- Table picker ---------- */
+.table-picker { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+.chip {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 14px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: var(--ink-soft);
+}
+.chip:hover { border-color: var(--navy); color: var(--navy); }
+.chip.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+.chip .count { margin-left: 6px; opacity: 0.6; font-size: 10px; }
+
+/* ---------- SQL console ---------- */
+.sql-layout { display: grid; grid-template-columns: 260px 1fr; gap: 24px; }
+.preset-list { display: flex; flex-direction: column; gap: 6px; }
+.preset {
+  padding: 12px 14px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+.preset:hover { border-color: var(--navy); color: var(--navy); background: #fff; }
+.preset.active { border-color: var(--accent); background: var(--accent-soft); color: var(--navy); }
+.preset-tag { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-bottom: 4px; letter-spacing: 0.06em; text-transform: uppercase; }
+.preset.active .preset-tag { color: var(--accent-dark); }
+
+.sql-main { display: flex; flex-direction: column; gap: 16px; }
+.sql-editor {
+  width: 100%;
+  min-height: 180px;
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  background: #0b1f3a;
+  color: #e8ecf3;
+  border: 1px solid var(--navy);
+  border-radius: var(--radius);
+  resize: vertical;
+  tab-size: 2;
+}
+.sql-editor:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sql-actions { display: flex; gap: 10px; align-items: center; }
+.btn {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 14px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  transition: all 0.15s ease;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-dark); }
+.btn-ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); }
+.btn-ghost:hover { border-color: var(--navy); color: var(--navy); }
+.sql-status { margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.sql-status.ok { color: var(--success); }
+.sql-status.err { color: #c53030; }
+
+.sql-result { min-height: 100px; }
+.sql-result .err-box {
+  padding: 16px;
+  background: #fff5f5;
+  border: 1px solid #fc8181;
+  border-radius: 8px;
+  color: #c53030;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+/* ---------- Analytics ---------- */
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.chart-card { background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 24px; }
+.chart-card h3 { font-family: var(--font-display); font-weight: 500; font-size: 17px; color: var(--navy); margin-bottom: 4px; }
+.chart-card p.caption { font-size: 12px; color: var(--muted); margin-bottom: 16px; font-family: var(--font-mono); }
+.chart-box { position: relative; height: 280px; }
+
+/* ---------- LLM ---------- */
+.llm-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; min-height: 500px; }
+.llm-left { display: flex; flex-direction: column; gap: 16px; }
+.llm-right { display: flex; flex-direction: column; gap: 16px; }
+
+.nl-input {
+  width: 100%;
+  min-height: 120px;
+  padding: 16px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  background: #fff;
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  resize: vertical;
+}
+.nl-input:focus { outline: none; border-color: var(--accent); }
+
+.suggestion-list { display: flex; flex-direction: column; gap: 6px; }
+.suggestion {
+  padding: 10px 14px;
+  background: var(--bg-elev);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink-soft);
+  transition: all 0.15s ease;
+}
+.suggestion:hover { border-style: solid; border-color: var(--accent); color: var(--navy); background: #fff; }
+
+.generated-sql {
+  background: var(--navy);
+  color: #e8ecf3;
+  padding: 16px;
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  min-height: 120px;
+  position: relative;
+}
+.generated-sql::before {
+  content: "GENERATED SQL";
+  position: absolute;
+  top: 10px; right: 14px;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: rgba(255,255,255,0.35);
+}
+
+.loading-shimmer {
+  background: linear-gradient(90deg, rgba(255,107,44,0.1) 0%, rgba(255,107,44,0.3) 50%, rgba(255,107,44,0.1) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  height: 14px;
+  border-radius: 4px;
+  margin: 8px 0;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ---------- Index decision cards ---------- */
+.idx-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.idx-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+.idx-card h4 { font-family: var(--font-mono); font-size: 13px; color: var(--navy); margin-bottom: 4px; }
+.idx-card p { font-size: 13px; color: var(--ink-soft); }
+.idx-card code { font-family: var(--font-mono); background: var(--line-soft); padding: 1px 6px; border-radius: 3px; font-size: 12px; color: var(--navy); }
+
+/* ---------- Footer ---------- */
+.footer {
+  padding: 24px 40px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-elev);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  display: flex; justify-content: space-between;
+  letter-spacing: 0.05em;
+}
+
+/* ---------- Loading overlay ---------- */
+.overlay {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 20px;
+  z-index: 1000;
+  transition: opacity 0.4s ease;
+}
+.overlay.hidden { opacity: 0; pointer-events: none; }
+.overlay-logo {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 72px;
+  color: var(--accent);
+  letter-spacing: -0.03em;
+  animation: logoFade 1.6s ease-in-out infinite alternate;
+}
+@keyframes logoFade { from { opacity: 0.5 } to { opacity: 1 } }
+.overlay-text {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 1100px) {
+  .hero { grid-template-columns: 1fr; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .er-grid { grid-template-columns: 1fr 1fr; }
+  .sql-layout, .llm-layout, .chart-grid, .idx-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<div class="overlay" id="loading-overlay">
+  <div class="overlay-logo">LaDe</div>
+  <div class="overlay-text">Initializing SQLite engine...</div>
+</div>
+
+<div class="app">
+
+  <!-- ============ TOP BAR ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">LaDe</span>
+      <span class="brand-name">Last-mile Delivery DB</span>
+      <span class="brand-sub">CSC 3170 · Group Project</span>
+    </div>
+    <div class="db-status loading" id="db-status">
+      <span class="db-dot"></span>
+      <span id="db-status-text">Connecting...</span>
+    </div>
+  </header>
+
+  <!-- ============ TABS ============ -->
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-panel="overview">
+      <span class="tab-num">01</span> Overview
+    </button>
+    <button class="tab" data-panel="schema">
+      <span class="tab-num">02</span> ER Diagram
+    </button>
+    <button class="tab" data-panel="data">
+      <span class="tab-num">03</span> Data Browser
+    </button>
+    <button class="tab" data-panel="sql">
+      <span class="tab-num">04</span> SQL Console
+    </button>
+    <button class="tab" data-panel="analytics">
+      <span class="tab-num">05</span> Analytics
+    </button>
+    <button class="tab" data-panel="llm">
+      <span class="tab-num">06</span> Ask in English
+      <span class="card-tag" style="font-size:9px;padding:1px 5px;">BONUS</span>
+    </button>
+  </nav>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+
+    <!-- ===== PANEL: OVERVIEW ===== -->
+    <section class="panel active" id="panel-overview">
+      <div class="hero">
+        <div>
+          <div class="hero-eyebrow">CSC 3170 · Database System Course Project</div>
+          <h1 class="hero-title">A relational database for<br><em>last-mile</em> delivery operations</h1>
+          <p class="hero-lede">
+            Built on Cainiao's publicly released LaDe dataset, this system designs and implements
+            a 3NF-normalized relational database for a hypothetical logistics company — supporting
+            daily pickup/delivery operations, courier trajectory tracking, and multi-dimensional
+            analytical queries.
+          </p>
+        </div>
+        <dl class="hero-meta">
+          <div class="meta-item">
+            <dt>Dataset</dt>
+            <dd>LaDe · Cainiao Network</dd>
+          </div>
+          <div class="meta-item">
+            <dt>City Scope</dt>
+            <dd>Jilin · 6-month sample</dd>
+          </div>
+          <div class="meta-item">
+            <dt>Normalization</dt>
+            <dd>3NF · 6 relations</dd>
+          </div>
+          <div class="meta-item">
+            <dt>Engine</dt>
+            <dd>SQLite 3 · in-browser (sql.js)</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="stat-grid" id="stat-grid"></div>
+
+      <div class="section">
+        <h2 class="section-title">Design Motivation</h2>
+        <p class="section-sub">Why last-mile delivery deserves a purpose-built database</p>
+        <div class="card">
+          <p style="margin-bottom:14px;">
+            Last-mile delivery is the <strong>most expensive and time-consuming</strong> stage
+            of e-commerce logistics. A major platform handles millions of orders daily, coordinates
+            tens of thousands of couriers, and dispatches dynamically across thousands of
+            AOIs (Areas of Interest).
+          </p>
+          <p style="margin-bottom:14px;">
+            The raw LaDe dataset stores orders as a wide table with heavy redundancy: every
+            order row repeats the courier's home city, the AOI's region, and its type.
+            At production scale this redundancy dramatically inflates storage cost and update latency.
+          </p>
+          <p>
+            We decomposed the wide table into <strong>6 relations satisfying 3NF</strong>,
+            eliminating transitive dependencies and separating fact tables (orders, trajectories)
+            from dimension tables (couriers, AOI, road network). Composite indexes were added
+            for high-frequency query patterns so the system can serve both operational workloads
+            and analytical data mining.
+          </p>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2 class="section-title">Eight Required Steps · Mapped to the Web</h2>
+        <p class="section-sub">Where each assignment step is addressed on this site</p>
+        <div class="idx-grid">
+          <div class="idx-card"><h4>Step 1-2 · Requirements & Entities</h4><p>See <code>Overview</code> — Design Motivation section</p></div>
+          <div class="idx-card"><h4>Step 3-4 · ER Diagram & Schemas</h4><p>See <code>ER Diagram</code> — interactive entity board</p></div>
+          <div class="idx-card"><h4>Step 5 · Data Population</h4><p>See <code>Data Browser</code> — six tables with real rows</p></div>
+          <div class="idx-card"><h4>Step 6 · Operational SQL</h4><p>See <code>SQL Console</code> — "Operational" preset group</p></div>
+          <div class="idx-card"><h4>Step 7 · Analytic / Mining SQL</h4><p>See <code>Analytics</code> + "Analytic" presets</p></div>
+          <div class="idx-card"><h4>Step 8 · Indexing Strategy</h4><p>See <code>Index Decisions</code> cards below</p></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2 class="section-title">Index Decisions</h2>
+        <p class="section-sub">Step 8 · Index strategy derived from observed query patterns</p>
+        <div class="idx-grid">
+          <div class="idx-card">
+            <h4>Courier_Trajectories (courier_id, gps_time)</h4>
+            <p><strong>Composite index.</strong> Most trajectory queries ask "show courier X's track between times A–B". A composite index on these two columns enables tight range scans and is by far the most impactful.</p>
+          </div>
+          <div class="idx-card">
+            <h4>Pickup/Delivery_Orders (courier_id)</h4>
+            <p>Speeds up JOINs for the frequent "show this courier's tasks today" pattern and avoids full-table scans.</p>
+          </div>
+          <div class="idx-card">
+            <h4>Pickup/Delivery_Orders (aoi_id)</h4>
+            <p>Supports AOI-level heatmaps and area-wise aggregations used in analytics.</p>
+          </div>
+          <div class="idx-card">
+            <h4>Pickup/Delivery_Orders (ds)</h4>
+            <p>Business queries almost always filter by date; indexing <code>ds</code> drastically cuts scan volume.</p>
+          </div>
+          <div class="idx-card">
+            <h4>AOI_Master (city, region_id)</h4>
+            <p>Enables hierarchical filtering, e.g. "list all AOIs in region R of city C".</p>
+          </div>
+          <div class="idx-card">
+            <h4>Couriers · PRIMARY KEY</h4>
+            <p>SQLite auto-creates a B-tree on the primary key, giving O(log n) courier lookups for free.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2 class="section-title">Implementation Notes</h2>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Demo Environment Disclosure</div><span class="card-tag">Transparency</span></div>
+          <p style="margin-bottom:10px;">
+            This demo uses <strong>SQLite</strong> running entirely in the browser so that graders
+            can try it with zero setup. Our production schema (Section 4 of the report) is
+            written in <strong>MySQL</strong> dialect; minor differences in DDL and date functions
+            have been accommodated in the preset queries.
+          </p>
+          <p style="margin-bottom:10px;">
+            <strong>Date normalization:</strong> the raw CSV stores timestamps as
+            <code>MM-DD HH:MM:SS</code> (no year). During ETL we prepend <code>2024-</code> so
+            that <code>julianday()</code> and other time functions work correctly.
+          </p>
+          <p>
+            <strong>Sample size:</strong> for browser performance we load 10,000 pickup +
+            10,000 delivery + 1,000 trajectory records from Jilin. The schema scales
+            unchanged to the 10,677k-package scale reported in the original paper.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== PANEL: SCHEMA ===== -->
+    <section class="panel" id="panel-schema">
+      <h2 class="section-title">Entity-Relationship Diagram</h2>
+      <p class="section-sub">Click any entity to inspect its fields · Navy = dimension / Orange = fact</p>
+
+      <div class="er-board">
+        <div class="er-grid">
+
+          <div class="entity" data-entity="Couriers">
+            <div class="entity-head">
+              Couriers
+              <span class="entity-head-tag">DIMENSION</span>
+            </div>
+            <div class="entity-body">
+              <div class="entity-field pk"><span class="field-badge pk">PK</span> courier_id <span class="entity-field-type">TEXT</span></div>
+              <div class="entity-field">city_base <span class="entity-field-type">TEXT</span></div>
+            </div>
+          </div>
+
+          <div class="entity" data-entity="AOI_Master">
+            <div class="entity-head">
+              AOI_Master
+              <span class="entity-head-tag">DIMENSION</span>
+            </div>
+            <div class="entity-body">
+              <div class="entity-field pk"><span class="field-badge pk">PK</span> aoi_id <span class="entity-field-type">TEXT</span></div>
+              <div class="entity-field">region_id <span class="entity-field-type">TEXT</span></div>
+              <div class="entity-field">city <span class="entity-field-type">TEXT</span></div>
+              <div class="entity-field">aoi_type <span class="entity-field-type">TEXT</span></div>
+            </div>
+          </div>
+
+          <div class="entity" data-entity="Road_Network">
+            <div class="entity-head">
+              Road_Network
+              <span class="entity-head-tag">STATIC GIS</span>
+            </div>
+            <div class="entity-body">
+              <div class="entity-field pk"><span class="field-badge pk">PK</span> road_id <span class="entity-field-type">TEXT</span></div>
+              <div class="entity-field">fclass, name, oneway <span class="entity-field-type">...</span></div>
+              <div class="entity-field">maxspeed <span class="entity-field-type">INT</span></div>
+              <div class="entity-field">geometry <span class="entity-field-type">LINESTRING</span></div>
+              <div class="entity-field" style="color: var(--muted); font-size: 10px;">+ 8 fields</div>
+            </div>
+          </div>
+
+          <div class="entity fact" data-entity="Pickup_Orders">
+            <div class="entity-head">
+              Pickup_Orders
+              <span class="entity-head-tag">FACT</span>
+            </div>
+            <div class="entity-body">
+              <div class="entity-field pk"><span class="field-badge pk">PK</span> order_id <span class="entity-field-type">TEXT</span></div>
+              <div class="entity-field fk"><span class="field-badge fk">FK</span> courier_id → Couriers</div>
+              <div class="entity-field fk"><span class="field-badge fk">FK</span> aoi_id → AOI_Master</div>
+              <div class="entity-field">time_window_start/end</div>
+              <div class="entity-field">accept_time, pickup_time</div>
+              <div class="entity-field">stop_lng, stop_lat, ds</div>
+              <div class="entity-field" style="color: var(--muted); font-size: 10px;">+ 6 GPS fields</div>
+            </div>
+          </div>
+
+          <div class="entity fact" data-entity="Delivery_Orders">
+            <div class="entity-head">
+              Delivery_Orders
+              <span class="entity-head-tag">FACT</span>
+            </div>
+            <div class="entity-body">
+              <div class="entity-field pk"><span class="field-badge pk">PK</span> order_id <span class="entity-field-type">TEXT</span></div>
+              <div class="entity-field fk"><span class="field-badge fk">FK</span> courier_id → Couriers</div>
+              <div class="entity-field fk"><span class="field-badge fk">FK</span> aoi_id → AOI_Master</div>
+              <div class="entity-field">accept_time, delivery_time</div>
+              <div class="entity-field">stop_lng, stop_lat, ds</div>
+              <div class="entity-field" style="color: var(--muted); font-size: 10px;">+ 6 GPS fields</div>
+            </div>
+          </div>
+
+          <div class="entity fact" data-entity="Courier_Trajectories">
+            <div class="entity-head">
+              Courier_Trajectories
+              <span class="entity-head-tag">FACT · TIME-SERIES</span>
+            </div>
+            <div class="entity-body">
+              <div class="entity-field pk"><span class="field-badge pk">PK</span> trajectory_id <span class="entity-field-type">INT</span></div>
+              <div class="entity-field fk"><span class="field-badge fk">FK</span> courier_id → Couriers</div>
+              <div class="entity-field">gps_time, lat, lng</div>
+              <div class="entity-field">ds <span class="entity-field-type">TEXT</span></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="section">
+        <h2 class="section-title">Normalization Rationale</h2>
+        <div class="idx-grid">
+          <div class="idx-card">
+            <h4>3NF · Eliminating Transitive Dependencies</h4>
+            <p>In the raw wide table, <code>aoi_id → city, region_id</code> forms a transitive dependency. After extracting <code>AOI_Master</code>, each order row stores only <code>aoi_id</code>; changing a city propagates by updating a single row.</p>
+          </div>
+          <div class="idx-card">
+            <h4>Separating Facts from Dimensions</h4>
+            <p>Fact tables (orders, trajectories) grow continuously; dimension tables (couriers, AOI) are small and slowly-changing. Separating them lets us apply different indexing and caching strategies.</p>
+          </div>
+          <div class="idx-card">
+            <h4>Pickup vs Delivery as Separate Tables</h4>
+            <p>Pickup orders have <code>time_window</code>; delivery orders do not. Merging would introduce many NULLs. Separate tables keep each schema complete and allow <code>NOT NULL</code> constraints.</p>
+          </div>
+          <div class="idx-card">
+            <h4>Trajectories as a Standalone Table</h4>
+            <p>GPS trajectories arrive every ~20 seconds — high-frequency time-series data. Attaching them to orders would create multivalued dependencies. A dedicated table supports efficient <code>(courier_id, gps_time)</code> indexing.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== PANEL: DATA BROWSER ===== -->
+    <section class="panel" id="panel-data">
+      <h2 class="section-title">Data Browser</h2>
+      <p class="section-sub">Real rows from all six normalized tables · Showing first 100 rows per table</p>
+
+      <div class="table-picker" id="table-picker"></div>
+
+      <div class="table-wrap" style="max-height: 640px;">
+        <table class="data" id="data-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p style="margin-top:12px; font-family: var(--font-mono); font-size: 11px; color: var(--muted);" id="data-meta"></p>
+    </section>
+
+    <!-- ===== PANEL: SQL CONSOLE ===== -->
+    <section class="panel" id="panel-sql">
+      <h2 class="section-title">SQL Console</h2>
+      <p class="section-sub">Real SQLite engine · Click a preset on the left, or write your own</p>
+
+      <div class="sql-layout">
+        <aside class="preset-list" id="preset-list"></aside>
+        <div class="sql-main">
+          <textarea class="sql-editor" id="sql-editor" spellcheck="false"></textarea>
+          <div class="sql-actions">
+            <button class="btn btn-primary" id="btn-run">
+              <span>▶</span> Run Query (Ctrl/⌘ + Enter)
+            </button>
+            <button class="btn btn-ghost" id="btn-clear">Clear</button>
+            <span class="sql-status" id="sql-status">Ready</span>
+          </div>
+          <div class="sql-result" id="sql-result"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== PANEL: ANALYTICS ===== -->
+    <section class="panel" id="panel-analytics">
+      <h2 class="section-title">Analytics Dashboard</h2>
+      <p class="section-sub">Step 7 · Six analytical SQL queries executed live and rendered as charts</p>
+
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Order Volume by Hour</h3>
+          <p class="caption">SELECT hour, COUNT(*) FROM Delivery_Orders GROUP BY hour</p>
+          <div class="chart-box"><canvas id="chart-hour"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>AOI Type Distribution</h3>
+          <p class="caption">Share of orders by AOI type — reflects neighborhood mix</p>
+          <div class="chart-box"><canvas id="chart-aoi"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Top 10 Couriers by Order Count</h3>
+          <p class="caption">Workload balance across the fleet</p>
+          <div class="chart-box"><canvas id="chart-courier"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Daily Order Trend</h3>
+          <p class="caption">Order volume over the 6-month window</p>
+          <div class="chart-box"><canvas id="chart-daily"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Delivery Duration Histogram</h3>
+          <p class="caption">Elapsed minutes from accept to delivery</p>
+          <div class="chart-box"><canvas id="chart-eta"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Pickup vs Delivery</h3>
+          <p class="caption">Hourly pickup and delivery volumes compared</p>
+          <div class="chart-box"><canvas id="chart-pickup-delivery"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== PANEL: LLM ===== -->
+    <section class="panel" id="panel-llm">
+      <h2 class="section-title">Ask in English <span class="card-tag" style="vertical-align:middle;">Bonus · LLM + DB</span></h2>
+      <p class="section-sub">Ask a question in plain English → Claude generates SQL → we run it on the database</p>
+
+      <div class="llm-layout">
+        <div class="llm-left">
+          <div class="card" style="padding:20px;">
+            <div class="card-title" style="margin-bottom:12px;">Your Question</div>
+            <textarea class="nl-input" id="nl-input" placeholder="e.g. Which courier handled the most orders? How many AOIs had orders in September?"></textarea>
+            <div style="margin-top: 12px; display: flex; gap: 8px;">
+              <button class="btn btn-primary" id="btn-nl">
+                <span>✦</span> Generate & Run
+              </button>
+              <span class="sql-status" id="nl-status">Ready</span>
+            </div>
+          </div>
+          <div class="card" style="padding:20px;">
+            <div class="card-title" style="margin-bottom:12px;">Example Questions · click to use</div>
+            <div class="suggestion-list">
+              <div class="suggestion">Who are the top 5 couriers by order count?</div>
+              <div class="suggestion">Which AOI type has the most orders?</div>
+              <div class="suggestion">How many delivery orders were placed on August 21?</div>
+              <div class="suggestion">How many distinct AOIs has courier 4849 served?</div>
+              <div class="suggestion">What is the average delivery time per region?</div>
+              <div class="suggestion">What are the busiest hours of the day?</div>
+              <div class="suggestion">Which couriers have the longest average delivery time?</div>
+              <div class="suggestion">How many orders did each courier handle in September?</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="llm-right">
+          <div class="card" style="padding:20px;">
+            <div class="card-title" style="margin-bottom:12px;">SQL Generated by Claude</div>
+            <div class="generated-sql" id="generated-sql">Waiting for a question...</div>
+          </div>
+          <div class="card" style="padding:20px; flex: 1;">
+            <div class="card-title" style="margin-bottom:12px;">Execution Result</div>
+            <div id="nl-result" style="min-height: 160px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2 class="section-title" style="font-size: 20px;">Architecture &amp; Prompt Design</h2>
+        <div class="card" style="font-size: 13.5px; line-height: 1.7;">
+          <p style="margin-bottom:10px;">
+            <strong>Architecture:</strong> the browser POSTs the user's question to a lightweight
+            Flask backend running on <code>localhost:5001</code>, which forwards it to DeepSeek V3.2
+            together with our schema prompt. The returned SQL is executed against the SQLite database
+            by <code>sql.js</code> in the browser. A backend proxy is required because the DeepSeek
+            API key must never be exposed in client-side JavaScript, and because browsers cannot
+            directly call external LLM APIs due to CORS restrictions.
+          </p>
+          <p style="margin-bottom:10px;">
+            <strong>Fault tolerance:</strong> if the backend is unreachable — during an offline demo,
+            or when the network is down — the frontend transparently falls back to a curated cache of
+            8 representative question/SQL pairs. The status indicator clearly marks whether each answer
+            came from a <em>live</em> LLM call or from the <em>cached</em> fallback. This two-layer
+            design guarantees the demo works in every scenario.
+          </p>
+          <p style="margin-bottom:10px;">
+            <strong>System prompt</strong> sent to DeepSeek consists of three critical elements:
+          </p>
+          <p style="margin-bottom:8px; padding-left: 14px;"><strong>① Schema context</strong> — all six tables with fields, primary keys, and foreign keys.</p>
+          <p style="margin-bottom:8px; padding-left: 14px;"><strong>② Dialect constraint</strong> — explicitly require SQLite syntax (e.g. <code>julianday()</code> instead of <code>TIMESTAMPDIFF</code>).</p>
+          <p style="margin-bottom:8px; padding-left: 14px;"><strong>③ Output format constraint</strong> — return raw SQL only, no markdown or commentary, so it can be parsed and executed directly.</p>
+          <p style="margin-bottom:8px; padding-left: 14px;"><strong>④ Safety guardrail</strong> — the backend rejects any generated SQL containing INSERT / UPDATE / DELETE / DROP, ensuring read-only access.</p>
+          <p style="color: var(--muted); font-size: 12px; margin-top: 12px;">
+            The full prompt text and a comparison study of 10 well-formed vs. ablated prompts
+            appears in the report appendix.
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <span>CSC 3170 · Database Systems · 2026 Group Project</span>
+    <span>Built with sql.js · Chart.js · Anthropic Claude</span>
+  </footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
