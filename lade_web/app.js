@@ -144,134 +144,156 @@ function loadTable(table) {
 // ============ SQL CONSOLE ============
 const PRESETS = [
   {
-    group: "Operational · Daily Use",
+    group:  "Operational · Daily Use ",
     queries: [
       {
-        title: "Q1 · Courier 393's pickup tasks",
-        desc: "Find a courier's pickups on a given day, joined with AOI type",
-        sql: `-- Step 6 · Q1: Pickup tasks for courier 393 on 08-21
-SELECT po.order_id,
-       po.accept_time,
-       po.pickup_time,
-       a.aoi_type
-FROM Pickup_Orders po
-JOIN AOI_Master a ON po.aoi_id = a.aoi_id
-WHERE po.courier_id = '393' AND po.ds = '821'
-ORDER BY po.accept_time
-LIMIT 20;`
+        title:  "Q1 · Urgent SLA Breach Alert ",
+        desc:  "Real-time system-wide monitor for orders approaching their 30-minute deadline that remain incomplete. ",
+        sql:  `-- Reference Time: '2023-08-21 14:30:00' (Replace with datetime('now') in production)
+SELECT 'Pickup' as order_type, po.order_id, po.courier_id, po.time_window_end, am.aoi_type,
+CAST((strftime('%s', po.time_window_end) - strftime('%s', '2023-08-21 14:30:00')) / 60.0 AS INTEGER) as minutes_remaining
+FROM Pickup_Orders po JOIN AOI_Master am ON po.aoi_id = am.aoi_id
+WHERE po.pickup_time IS NULL AND am.city = 'Jilin' AND po.ds = '821'
+AND strftime('%s', po.time_window_end) - strftime('%s', '2023-08-21 14:30:00') <= 1800
+AND strftime('%s', po.time_window_end) - strftime('%s', '2023-08-21 14:30:00') > 0
+UNION ALL
+SELECT 'Delivery' as order_type, do.order_id, do.courier_id, do.delivery_time as time_window_end, am.aoi_type,
+CAST((strftime('%s', do.delivery_time) - strftime('%s', '2023-08-21 14:30:00')) / 60.0 AS INTEGER) as minutes_remaining
+FROM Delivery_Orders do JOIN AOI_Master am ON do.aoi_id = am.aoi_id
+WHERE do.delivery_time IS NULL AND am.city = 'Jilin' AND do.ds = '821'
+AND strftime('%s', do.delivery_time) - strftime('%s', '2023-08-21 14:30:00') <= 1800
+AND strftime('%s', do.delivery_time) - strftime('%s', '2023-08-21 14:30:00') > 0
+ORDER BY minutes_remaining ASC;`
       },
       {
-        title: "Q2 · Pickups past time window",
-        desc: "Find orders where actual pickup happened after the promised end time",
-        sql: `-- Detect SLA violations: pickup_time later than the committed window end
-SELECT po.order_id, po.courier_id, po.time_window_end, po.pickup_time
-FROM Pickup_Orders po
-WHERE po.pickup_time > po.time_window_end
-ORDER BY po.pickup_time DESC
-LIMIT 30;`
+        title:  "Q2 · Courier Immediate Workload Window (1-Hour View) ",
+        desc:  "View all tasks accepted within the last hour or due within the next hour for immediate route planning. ",
+        sql:  `SELECT 'Pickup' as task_type, po.order_id, po.accept_time, po.time_window_end, am.aoi_type
+FROM Pickup_Orders po JOIN AOI_Master am ON po.aoi_id = am.aoi_id
+WHERE po.courier_id = '393' AND am.city = 'Jilin' AND po.ds = '821'
+AND (strftime('%s', po.accept_time) >= strftime('%s', '2023-08-21 14:30:00') - 3600
+OR strftime('%s', po.time_window_end) BETWEEN strftime('%s', '2023-08-21 14:30:00') AND strftime('%s', '2023-08-21 14:30:00') + 3600)
+UNION ALL
+SELECT 'Delivery' as task_type, do.order_id, do.accept_time, do.delivery_time, am.aoi_type
+FROM Delivery_Orders do JOIN AOI_Master am ON do.aoi_id = am.aoi_id
+WHERE do.courier_id = '393' AND am.city = 'Jilin' AND do.ds = '821'
+AND (strftime('%s', do.accept_time) >= strftime('%s', '2023-08-21 14:30:00') - 3600
+OR strftime('%s', do.accept_time) BETWEEN strftime('%s', '2023-08-21 14:30:00') AND strftime('%s', '2023-08-21 14:30:00') + 3600)
+ORDER BY accept_time DESC;`
       },
       {
-        title: "Q3 · Orders in one AOI today",
-        desc: "What a zone dispatcher needs: all of today's orders in AOI 12",
-        sql: `-- All pickup orders in AOI 12 on 08-21
-SELECT po.order_id, po.courier_id, po.accept_time, po.pickup_time
-FROM Pickup_Orders po
-WHERE po.aoi_id = '12' AND po.ds = '821';`
+        title:  "Q3 · Live Courier Location & Signal Freshness ",
+        desc:  "Retrieve the most recent GPS ping and calculate minutes since last signal to detect offline devices. ",
+        sql:  `SELECT ct.courier_id, ct.gps_time, ct.lat, ct.lng,
+CAST((strftime('%s', '2023-08-21 14:30:00') - strftime('%s', ct.gps_time)) / 60.0 AS INTEGER) as minutes_ago
+FROM Courier_Trajectories ct JOIN Couriers c ON ct.courier_id = c.courier_id
+WHERE ct.courier_id = '393' AND c.city_base = 'Jilin' AND ct.ds = '821'
+ORDER BY ct.gps_time DESC LIMIT 1;`
       },
+      {
+        title:  "Q4 · Order Execution Trajectory Audit ",
+        desc:  "Investigate courier movement strictly between order acceptance and pickup times for delay verification. ",
+        sql:  `-- Part A: Order Static Information
+SELECT 'Order_Info' as record_type, po.order_id, po.courier_id, am.aoi_type, am.city, po.accept_time, po.pickup_time
+FROM Pickup_Orders po JOIN AOI_Master am ON po.aoi_id = am.aoi_id
+WHERE po.order_id = '2444404' AND am.city = 'Jilin';
+
+-- Part B: Trajectory During Execution
+SELECT 'Trajectory_Point' as record_type, ct.gps_time, ct.lat, ct.lng
+FROM Courier_Trajectories ct JOIN Pickup_Orders po ON ct.courier_id = po.courier_id
+WHERE po.order_id = '2444404' AND ct.gps_time BETWEEN po.accept_time AND po.pickup_time
+ORDER BY ct.gps_time ASC;`
+      }
     ]
   },
   {
-    group: "Analytic · Data Mining",
+    group:  "Analytic · Data Mining ",
     queries: [
       {
-        title: "Q4 · Avg delivery time by AOI type",
-        desc: "Reveals which neighborhood types are slower to deliver",
-        sql: `-- Step 7 · Average delivery duration (minutes) per AOI type
-SELECT a.aoi_type,
-       COUNT(*) AS order_count,
-       ROUND(AVG((julianday(d.delivery_time)-julianday(d.accept_time))*1440), 1) AS avg_minutes
-FROM Delivery_Orders d
-JOIN AOI_Master a ON d.aoi_id = a.aoi_id
-WHERE d.delivery_time IS NOT NULL
-GROUP BY a.aoi_type
-ORDER BY avg_minutes DESC;`
+        title:  "Q5 · Courier Performance & Punctuality Ranking ",
+        desc:  "Rank couriers by composite score (40% efficiency, 40% punctuality, 20% volume) for bonus calculations. ",
+        sql:  `SELECT c.courier_id,
+COUNT(DISTINCT po.order_id) + COUNT(DISTINCT do.order_id) as total_tasks,
+AVG(CASE WHEN po.pickup_time IS NOT NULL
+THEN (strftime('%s', po.pickup_time) - strftime('%s', po.accept_time)) / 60.0 ELSE NULL END) as avg_completion_minutes,
+SUM(CASE WHEN po.pickup_time <= po.time_window_end THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(po.order_id), 0) as punctuality_rate,
+( (SUM(CASE WHEN po.pickup_time <= po.time_window_end THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(po.order_id), 0)) * 0.4 +
+  (100.0 / (1.0 + AVG(CASE WHEN po.pickup_time IS NOT NULL THEN (strftime('%s', po.pickup_time) - strftime('%s', po.accept_time)) / 60.0 ELSE 30.0 END))) * 0.4 +
+  (MIN(COUNT(DISTINCT po.order_id) + COUNT(DISTINCT do.order_id), 50) / 50.0 * 100) * 0.2 ) as performance_score
+FROM Couriers c
+LEFT JOIN Pickup_Orders po ON c.courier_id = po.courier_id AND po.ds = '821'
+LEFT JOIN Delivery_Orders do ON c.courier_id = do.courier_id AND do.ds = '821'
+WHERE c.city_base = 'Jilin'
+GROUP BY c.courier_id HAVING total_tasks > 0 ORDER BY performance_score DESC;`
       },
       {
-        title: "Q5 · Top couriers by workload",
-        desc: "Performance review: spot over- and under-loaded couriers",
-        sql: `-- Top 10 busiest couriers
-SELECT courier_id,
-       COUNT(*) AS total_orders,
-       COUNT(DISTINCT ds) AS active_days,
-       ROUND(1.0 * COUNT(*) / COUNT(DISTINCT ds), 1) AS orders_per_day
-FROM Delivery_Orders
-GROUP BY courier_id
-ORDER BY total_orders DESC
-LIMIT 10;`
+        title:  "Q6 · Regional & AOI Efficiency Benchmarking ",
+        desc:  "Compare operational performance across different AOI types using completion time and on-time compliance rates. ",
+        sql:  `SELECT am.aoi_type, COUNT(po.order_id) as total_pickups,
+AVG(CASE WHEN po.pickup_time IS NOT NULL
+THEN (strftime('%s', po.pickup_time) - strftime('%s', po.accept_time)) / 60.0 ELSE NULL END) as avg_completion_minutes,
+SUM(CASE WHEN po.pickup_time IS NOT NULL AND po.pickup_time <= po.time_window_end THEN 1 ELSE 0 END) * 100.0
+/ NULLIF(SUM(CASE WHEN po.pickup_time IS NOT NULL THEN 1 ELSE 0 END), 0) as on_time_rate
+FROM Pickup_Orders po JOIN AOI_Master am ON po.aoi_id = am.aoi_id
+WHERE po.ds = '821' AND am.city = 'Jilin'
+GROUP BY am.aoi_type HAVING total_pickups >= 5 ORDER BY avg_completion_minutes DESC;`
       },
       {
-        title: "Q6 · Hourly order peak",
-        desc: "Identifies rush hours to inform shift scheduling",
-        sql: `-- Delivery order volume by hour of day (accept_time)
-SELECT CAST(substr(accept_time, 12, 2) AS INTEGER) AS hour_of_day,
-       COUNT(*) AS orders
-FROM Delivery_Orders
-GROUP BY hour_of_day
-ORDER BY hour_of_day;`
+        title:  "Q7 · Peak Demand Hour Identification ",
+        desc:  "Identify hours exceeding 150% of the daily average order volume to optimize shift scheduling. ",
+        sql:  `WITH hourly_stats AS (
+  SELECT strftime('%H', po.accept_time) as hour_of_day, COUNT(*) as order_count
+  FROM Pickup_Orders po JOIN AOI_Master am ON po.aoi_id = am.aoi_id
+  WHERE po.ds = '821' AND am.city = 'Jilin' GROUP BY strftime('%H', po.accept_time)
+),
+daily_average AS (
+  SELECT AVG(order_count) as avg_hourly_orders FROM hourly_stats
+)
+SELECT hs.hour_of_day, hs.order_count,
+CAST(hs.order_count * 100.0 / da.avg_hourly_orders AS INTEGER) as volume_percentage,
+CASE WHEN hs.order_count > da.avg_hourly_orders * 1.5 THEN 'PEAK'
+     WHEN hs.order_count < da.avg_hourly_orders * 0.5 THEN 'LOW'
+     ELSE 'NORMAL' END as demand_level
+FROM hourly_stats hs, daily_average da WHERE hs.order_count >= 5 ORDER BY hs.order_count DESC;`
       },
       {
-        title: "Q7 · Region-level coverage",
-        desc: "Multi-dimensional GROUP BY across regions",
-        sql: `-- For each region: number of couriers, AOIs, and orders
-SELECT a.region_id,
-       COUNT(DISTINCT d.courier_id) AS couriers,
-       COUNT(DISTINCT a.aoi_id)     AS aois,
-       COUNT(*)                     AS orders
-FROM Delivery_Orders d
-JOIN AOI_Master a ON d.aoi_id = a.aoi_id
-GROUP BY a.region_id
-ORDER BY orders DESC;`
-      },
-      {
-        title: "Q8 · Courier-AOI specialization",
-        desc: "Window function: each courier's most-served AOI",
-        sql: `-- Find each courier's dominant AOI (ROW_NUMBER example)
-SELECT courier_id, aoi_id, cnt FROM (
-  SELECT courier_id, aoi_id, COUNT(*) AS cnt,
-         ROW_NUMBER() OVER (PARTITION BY courier_id ORDER BY COUNT(*) DESC) AS rn
-  FROM Delivery_Orders
-  GROUP BY courier_id, aoi_id
-) WHERE rn = 1
-ORDER BY cnt DESC
-LIMIT 15;`
-      },
+        title:  "Q8 · Service Coverage Gap Analysis ",
+        desc:  "Detect AOIs in Jilin with no recent pickup or delivery orders to identify potential market gaps. ",
+        sql:  `SELECT am.aoi_id, am.aoi_type, 'No Orders' as coverage_status
+FROM AOI_Master am
+WHERE am.city = 'Jilin' AND am.aoi_type NOT IN ('warehouse', 'depot')
+AND am.aoi_id NOT IN (
+  SELECT DISTINCT aoi_id FROM Pickup_Orders WHERE ds = '821'
+  UNION
+  SELECT DISTINCT aoi_id FROM Delivery_Orders WHERE ds = '821'
+)
+ORDER BY am.aoi_type;`
+      }
     ]
   },
   {
-    group: "Schema · Metadata",
+    group:  "Schema · Metadata ",
     queries: [
       {
-        title: "Inspect all tables & row counts",
-        desc: "Query the system catalog",
-        sql: `SELECT name AS table_name,
-  (SELECT COUNT(*) FROM Couriers)            AS n1,
-  (SELECT COUNT(*) FROM AOI_Master)          AS n2,
-  (SELECT COUNT(*) FROM Pickup_Orders)       AS n3,
-  (SELECT COUNT(*) FROM Delivery_Orders)     AS n4,
-  (SELECT COUNT(*) FROM Courier_Trajectories) AS n5,
-  (SELECT COUNT(*) FROM Road_Network)        AS n6
+        title:  "Inspect all tables & row counts ",
+        desc:  "Query the system catalog to verify table structures and dataset sizes. ",
+        sql:  `SELECT name AS table_name,
+(SELECT COUNT(*) FROM Couriers) AS n1,
+(SELECT COUNT(*) FROM AOI_Master) AS n2,
+(SELECT COUNT(*) FROM Pickup_Orders) AS n3,
+(SELECT COUNT(*) FROM Delivery_Orders) AS n4,
+(SELECT COUNT(*) FROM Courier_Trajectories) AS n5,
+(SELECT COUNT(*) FROM Road_Network) AS n6
 FROM sqlite_master WHERE type='table' LIMIT 1;`
       },
       {
-        title: "List declared indexes",
-        desc: "Verify that Step 8 index plan is actually in place",
-        sql: `SELECT name AS index_name, tbl_name AS on_table, sql
-FROM sqlite_master
-WHERE type='index' AND name NOT LIKE 'sqlite_%'
-ORDER BY tbl_name, name;`
-      },
+        title:  "List declared indexes ",
+        desc:  "Verify that index plans are correctly in place for query optimization. ",
+        sql:  `SELECT name AS index_name, tbl_name AS on_table, sql
+FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%' ORDER BY tbl_name, name;`
+      }
     ]
-  },
+  }
 ];
 
 function renderPresetQueries() {
